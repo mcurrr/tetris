@@ -1,5 +1,7 @@
 import React, { Component } from 'react';
-import { map } from 'lodash';
+import { includes, isEmpty } from 'lodash';
+import { fromEvent, Subject, empty, timer } from 'rxjs';
+import { map, filter, switchMap } from 'rxjs/operators';
 
 import Cell from '../Cell/Cell';
 import { removeCell, fillArray, dropDownArray } from '../../utils';
@@ -7,13 +9,68 @@ import './App.css';
 
 
 class App extends Component {
+  pauser = null;
+
   constructor(props) {
     super(props);
 
     this.state = {
       array: props.array,
-      refilled: true
+      refilled: true,
+      paused: false
     }
+  }
+
+  componentDidMount() {
+    this.subscribeKeyboard();
+    this.subscribeTimer();
+  }
+
+  subscribeTimer = () => {
+    const source = timer(1000, 1000);
+    this.pauser = new Subject();
+    const pausable = this.pauser.pipe(switchMap(paused =>
+      paused ? empty() : source));
+
+    pausable.subscribe(console.log);
+
+    this.pauser.next(false);
+  }
+
+  subscribeKeyboard() {
+    fromEvent(document, 'keydown')
+      .pipe(
+        map(event => +event.keyCode)
+      )
+      .subscribe(this.handleKeyboard);
+  }
+
+  handleKeyboard = code => {
+    switch (code) {
+      case 32: this.rotate();
+        break;
+      case 13:
+      case 27: this.togglePause();
+        break;
+      default: this.move(code);
+    }
+  }
+
+  rotate() {
+    console.log('rotate');
+  }
+
+  togglePause = () => {
+    const { paused } = this.state;
+    console.log('pause toggle', !paused);
+    this.setState({ paused: !paused });
+    this.pauser.next(!paused);
+  }
+
+  move(code) {
+    if (!includes([37, 38, 39, 40], code)) return;
+
+    console.warn('move');
   }
 
   refill = () => {
@@ -39,9 +96,9 @@ class App extends Component {
 
     return (
       <div className={`app ${!refilled ? 'blocked' : ''}`}>
-        {map(array, (row, index) =>
+        {array.map((row, index) =>
         <div key={index}>
-          {map(row, (cell, anotherIndex) =>
+          {row.map((cell, anotherIndex) =>
             <Cell
               key={anotherIndex}
               onChange={this.onChange}
